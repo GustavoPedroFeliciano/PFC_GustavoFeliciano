@@ -352,12 +352,11 @@ Os resultados, limitações e possibilidades de melhoria são discutidos no Trab
 
 ## Versão associada ao TCC
 
-A versão do código correspondente à implementação apresentada na monografia está identificada pela seguinte release/tag:
+A versão do código correspondente à implementação apresentada no Trabalho de Conclusão de Curso está registrada no commit:
 
-`v1.0-tcc`
+bd11a36791bfb6d69456bc6ffdbd0aebd00a61dc
 
-Essa versão deve permanecer inalterada para garantir a rastreabilidade entre os códigos disponibilizados e os resultados apresentados no trabalho.
-
+Esse commit constitui a referência da versão do software utilizada nos testes e resultados apresentados na monografia.
 ---
 
 ## Autor
