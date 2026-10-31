@@ -20,7 +20,6 @@ A comunicação entre o módulo principal e as pulseiras é realizada por meio d
 
 ### Arquitetura simplificada
 
-```text
                  +----------------------+
                  |    Módulo Principal  |
                  |      ESP32-S3        |
