@@ -357,6 +357,7 @@ A versão do código correspondente à implementação apresentada no Trabalho d
 bd11a36791bfb6d69456bc6ffdbd0aebd00a61dc
 
 Esse commit constitui a referência da versão do software utilizada nos testes e resultados apresentados na monografia.
+
 ---
 
 ## Autor
