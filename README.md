@@ -8,261 +8,191 @@ O projeto consiste em um dispositivo vestível de baixo custo destinado à detec
 
 ## Visão geral do sistema
 
-O protótipo é composto por três unidades vestíveis independentes:
+O protótipo é composto por:
 
 - um **módulo principal**, responsável pelo sensoriamento e processamento;
 - uma **pulseira vibrotátil esquerda**;
-- uma **pulseira vibrotátil direita**.
-
-Além dessas unidades, foi desenvolvida uma **base externa de carregamento** para recarga das baterias.
+- uma **pulseira vibrotátil direita**;
+- uma **base externa de carregamento**.
 
 A comunicação entre o módulo principal e as pulseiras é realizada por meio do protocolo **ESP-NOW**, sem necessidade de roteador ou conexão com a Internet.
 
 ### Arquitetura simplificada
 
-                 +----------------------+
-                 |    Módulo Principal  |
-                 |      ESP32-S3        |
-                 +----------+-----------+
-                            |
-        +-------------------+-------------------+
-        |                   |                   |
-   HC-SR04 x4            Buzzer             ESP-NOW
-                                                |
-                              +-----------------+-----------------+
-                              |                                   |
-                    +---------+---------+               +---------+---------+
-                    | Pulseira Esquerda |               | Pulseira Direita  |
-                    |     ESP32-C3      |               |     ESP32-C3      |
-                    +---------+---------+               +---------+---------+
-                              |                                   |
-                         Vibracall                           Vibracall
+```text
+                    Módulo Principal
+                       ESP32-S3
+                           |
+          +----------------+----------------+
+          |                |                |
+      HC-SR04 x4        Buzzer           ESP-NOW
+                                            |
+                              +-------------+-------------+
+                              |                           |
+                       Pulseira Esquerda           Pulseira Direita
+                          ESP32-C3                    ESP32-C3
+                              |                           |
+                          Vibracall                   Vibracall
+```
 
-Hardware utilizado
+---
 
-Módulo principal
+## Hardware utilizado
 
-ESP32-S3 Super Mini;
+### Módulo principal
 
-4 sensores ultrassônicos HC-SR04;
+- ESP32-S3 Super Mini;
+- 4 sensores ultrassônicos HC-SR04;
+- buzzer ativo;
+- bateria Li-Po de 3,7 V / 800 mAh;
+- conversor elevador MT3608;
+- capacitor eletrolítico de 1000 µF;
+- capacitor cerâmico de 100 nF;
+- divisores resistivos para adequação dos sinais ECHO;
+- placa de circuito impresso desenvolvida para o protótipo.
 
-buzzer ativo;
-
-bateria Li-Po 3,7 V / 800 mAh;
-
-conversor elevador MT3608;
-
-capacitor eletrolítico de 1000 µF;
-
-capacitor cerâmico de 100 nF;
-
-divisores resistivos para adequação dos sinais ECHO;
-
-placa de circuito impresso desenvolvida especificamente para o protótipo.
-
-Pulseiras vibrotáteis
+### Pulseiras vibrotáteis
 
 Cada pulseira utiliza:
 
-ESP32-C3 Super Mini;
+- ESP32-C3 Super Mini;
+- módulo motor de vibração;
+- bateria Li-Po de 3,7 V / 800 mAh;
+- conversor elevador MT3608;
+- capacitor eletrolítico de 470 µF;
+- capacitor cerâmico de 100 nF;
+- placa de circuito impresso dedicada.
 
-módulo motor de vibração;
+### Base de carregamento
 
-bateria Li-Po 3,7 V / 800 mAh;
+A base de carregamento utiliza:
 
-conversor elevador MT3608;
+- módulo baseado no TP4056;
+- alimentação externa de 5 V;
+- interface dedicada para conexão com as unidades vestíveis.
 
-capacitor eletrolítico de 470 µF;
+> **Atenção:** os conectores USB Tipo C presentes nas unidades vestíveis são utilizados apenas como interface física para o carregamento desenvolvido neste projeto. Eles **não correspondem a entradas USB Tipo C convencionais de 5 V** e devem ser utilizados exclusivamente com a base de carregamento do protótipo.
 
-capacitor cerâmico de 100 nF;
+---
 
-placa de circuito impresso dedicada.
+## Distribuição dos GPIOs
 
-Base de carregamento
+### Módulo principal
 
-módulo carregador baseado no TP4056;
+| Dispositivo | TRIG | ECHO |
+|---|---:|---:|
+| Sensor superior direito | GPIO 11 | GPIO 10 |
+| Sensor inferior direito | GPIO 9 | GPIO 8 |
+| Sensor superior esquerdo | GPIO 4 | GPIO 5 |
+| Sensor inferior esquerdo | GPIO 6 | GPIO 7 |
+| Buzzer | GPIO 1 | — |
 
-alimentação externa de 5 V;
+### Pulseiras
 
-interface dedicada para carregamento das três unidades do protótipo.
+O módulo motor de vibração de cada pulseira é controlado pelo **GPIO 4** do ESP32-C3.
 
-Atenção: os conectores USB Tipo C presentes nas unidades vestíveis são utilizados como interface física dedicada de carregamento e não devem ser tratados como entradas USB Tipo C convencionais de 5 V.
+---
 
-Distribuição dos sensores
+## Estratégia de detecção
 
-Os quatro sensores ultrassônicos são organizados em quatro regiões:
+Os sensores foram divididos entre as regiões superior e inferior dos lados esquerdo e direito do usuário.
 
-Região
+Os sensores superiores são orientados predominantemente para a região frontal, enquanto os sensores inferiores são inclinados em direção à região inferior do trajeto.
 
-TRIG
+Foram adotados os seguintes limiares:
 
-ECHO
+| Posição do sensor | Alerta vibrotátil | Condição crítica |
+|---|---:|---:|
+| Superior | 140 cm | 70 cm |
+| Inferior | 205 cm | 166 cm |
 
-Superior direita
+Os valores dos sensores inferiores foram definidos considerando a geometria de instalação, com altura aproximada de 1,50 m.
 
-GPIO 11
+Na versão final do software, **não é realizada correção geométrica das distâncias durante a execução**. A geometria foi utilizada apenas para definir os limiares equivalentes dos sensores inferiores.
 
-GPIO 10
+---
 
-Inferior direita
+## Tratamento das medições
 
-GPIO 9
+Para aumentar a estabilidade das leituras dos sensores ultrassônicos, foram utilizadas as seguintes estratégias:
 
-GPIO 8
+- faixa válida de medição entre **2 cm e 250 cm**;
+- leitura sequencial dos quatro sensores;
+- intervalo de aproximadamente **40 ms** entre acionamentos;
+- filtro de mediana de **3 amostras** por sensor.
 
-Superior esquerda
+As distâncias filtradas são utilizadas diretamente pela lógica de detecção de obstáculos.
 
-GPIO 4
+---
 
-GPIO 5
+## Estratégia de alertas
 
-Inferior esquerda
+A posição e o padrão da vibração são utilizados para indicar a região aproximada do obstáculo.
 
-GPIO 6
+| Condição detectada | Pulseira | Padrão |
+|---|---|---|
+| Obstáculo superior esquerdo | Esquerda | Contínuo |
+| Obstáculo inferior esquerdo | Esquerda | Pulsante |
+| Obstáculo superior direito | Direita | Contínuo |
+| Obstáculo inferior direito | Direita | Pulsante |
+| Superior e inferior no mesmo lado | Correspondente | Contínuo |
+| Nenhum obstáculo | Correspondente | Desligado |
 
-GPIO 7
+O padrão pulsante utiliza aproximadamente **200 ms ligado e 200 ms desligado**.
 
-O buzzer do módulo principal é conectado ao GPIO 1.
+Quando qualquer sensor identifica um obstáculo dentro da faixa crítica, o **buzzer do módulo principal** também é acionado.
 
-Nas pulseiras, o módulo motor de vibração é controlado pelo GPIO 4 do ESP32-C3.
+---
 
-Estratégia de detecção
+## Comunicação ESP-NOW
 
-Os sensores superiores e inferiores possuem orientações diferentes no protótipo.
+O ESP32-S3 do módulo principal atua como transmissor, enquanto os ESP32-C3 das pulseiras atuam como receptores.
 
-Foram definidos dois níveis principais de distância:
+Cada pulseira possui um endereço MAC próprio, permitindo o envio independente dos comandos.
 
-Posição do sensor
+### Endereços MAC utilizados
 
-Alerta vibrotátil
+| Unidade | Endereço MAC |
+|---|---|
+| Pulseira esquerda | `B8:1F:3F:FC:38:14` |
+| Pulseira direita | `B8:1F:3F:FC:36:40` |
 
-Condição crítica
+A estrutura utilizada para transmissão dos comandos é:
 
-Superior
-
-140 cm
-
-70 cm
-
-Inferior
-
-205 cm
-
-166 cm
-
-Os valores dos sensores inferiores consideram a geometria de instalação dos sensores, posicionados aproximadamente a 1,50 m de altura.
-
-Na versão final do software, não é realizada correção geométrica das distâncias durante a execução. A geometria foi utilizada apenas para determinar os limiares equivalentes dos sensores inferiores.
-
-Tratamento das medições
-
-Para melhorar a estabilidade das leituras ultrassônicas, o software utiliza:
-
-faixa válida de medição entre 2 cm e 250 cm;
-
-aquisição sequencial dos sensores;
-
-intervalo de aproximadamente 40 ms entre leituras;
-
-filtro de mediana de 3 amostras por sensor.
-
-As medições filtradas são utilizadas diretamente pela lógica de detecção.
-
-Estratégia de alertas
-
-O sistema utiliza a posição e o padrão de vibração para representar a região na qual o obstáculo foi detectado.
-
-Condição
-
-Pulseira
-
-Alerta
-
-Obstáculo superior esquerdo
-
-Esquerda
-
-Vibração contínua
-
-Obstáculo inferior esquerdo
-
-Esquerda
-
-Vibração pulsante
-
-Obstáculo superior direito
-
-Direita
-
-Vibração contínua
-
-Obstáculo inferior direito
-
-Direita
-
-Vibração pulsante
-
-Superior + inferior no mesmo lado
-
-Correspondente
-
-Vibração contínua
-
-Nenhum obstáculo
-
-Correspondente
-
-Desligado
-
-O padrão pulsante utiliza aproximadamente:
-
-200 ms ligado
-200 ms desligado
-
-Quando um obstáculo é detectado dentro da faixa crítica, o buzzer do módulo principal também é acionado.
-
-Comunicação ESP-NOW
-
-O ESP32-S3 atua como transmissor e os dois ESP32-C3 atuam como receptores.
-
-Cada pulseira possui um endereço MAC próprio, permitindo que o módulo principal envie comandos independentemente para os lados esquerdo e direito.
-
-Endereços utilizados no protótipo
-
-Pulseira esquerda: B8:1F:3F:FC:38:14
-Pulseira direita:  B8:1F:3F:FC:36:40
-
-A mensagem enviada entre os dispositivos possui a estrutura:
-
+```cpp
 struct DataMessage {
     uint8_t estado;
     uint32_t sequencia;
 };
+```
 
 Os estados utilizados são:
 
-DESLIGADO = 0
-CONTINUO  = 1
-PULSANTE  = 2
+| Estado | Valor |
+|---|---:|
+| Desligado | `0` |
+| Contínuo | `1` |
+| Pulsante | `2` |
 
-O campo sequencia é utilizado para acompanhar a ordem das mensagens durante os testes de comunicação.
+O campo `sequencia` é utilizado para acompanhar a ordem das mensagens durante os testes de comunicação.
 
-Segurança em caso de perda de comunicação
+---
 
-As pulseiras possuem um mecanismo de segurança para evitar que um comando antigo permaneça acionando o motor caso a comunicação seja interrompida.
+## Segurança em caso de perda de comunicação
 
-Se nenhuma mensagem válida for recebida por aproximadamente:
+Cada pulseira registra o instante da última mensagem válida recebida.
 
-2000 ms
+Caso nenhuma nova mensagem seja recebida durante aproximadamente **2000 ms**, o motor de vibração é automaticamente desligado.
 
-o motor de vibração é automaticamente desligado.
+Esse mecanismo evita que um comando antigo permaneça ativo após uma interrupção da comunicação.
 
-O funcionamento normal é restabelecido quando uma nova mensagem válida é recebida.
+O funcionamento normal é retomado após o recebimento de uma nova mensagem válida.
 
-Estrutura do repositório
+---
 
-A organização sugerida para os arquivos é:
+## Estrutura do repositório
 
+```text
 /
 ├── ModuloPrincipal/
 │   └── ModuloPrincipal_Final.ino
@@ -277,181 +207,170 @@ A organização sugerida para os arquivos é:
 │   └── MACadress.ino
 │
 └── README.md
+```
 
-ModuloPrincipal_Final.ino
+### Módulo principal
 
-Responsável por:
+O arquivo `ModuloPrincipal_Final.ino` é responsável por:
 
-leitura dos quatro sensores HC-SR04;
+- leitura dos quatro sensores HC-SR04;
+- validação das distâncias;
+- aplicação do filtro de mediana;
+- classificação das condições de detecção;
+- definição dos estados das pulseiras;
+- acionamento do buzzer;
+- transmissão dos comandos por ESP-NOW.
 
-validação das distâncias;
+### Pulseira esquerda
 
-filtro de mediana;
+O arquivo `PulseiraEsquerda_Final.ino` realiza:
 
-classificação dos obstáculos;
+- recepção dos comandos ESP-NOW;
+- controle do módulo de vibração;
+- geração dos padrões contínuo e pulsante;
+- tratamento do timeout de comunicação.
 
-definição dos estados das pulseiras;
+### Pulseira direita
 
-acionamento do buzzer;
+O arquivo `PulseiraDireita_Final.ino` utiliza a mesma lógica de funcionamento, sendo destinado à unidade do lado direito.
 
-transmissão dos comandos por ESP-NOW.
+### Utilitário de endereço MAC
 
-PulseiraEsquerda_Final.ino
+O arquivo `MACadress.ino` foi utilizado para consultar o endereço MAC dos microcontroladores durante a configuração da comunicação ESP-NOW.
 
-Responsável por:
+---
 
-recepção dos comandos destinados à pulseira esquerda;
-
-controle do motor de vibração;
-
-geração dos estados contínuo e pulsante;
-
-implementação do mecanismo de timeout.
-
-PulseiraDireita_Final.ino
-
-Possui a mesma lógica da pulseira esquerda, utilizando o endereço correspondente à unidade direita.
-
-MACadress.ino
-
-Código auxiliar utilizado para consultar o endereço MAC dos microcontroladores ESP32 durante a configuração da comunicação ESP-NOW.
-
-Ambiente de desenvolvimento
+## Ambiente de desenvolvimento
 
 Os códigos foram desenvolvidos utilizando:
 
-Arduino IDE;
+- Arduino IDE;
+- suporte à família ESP32;
+- ESP32-S3 Super Mini;
+- ESP32-C3 Super Mini.
 
-suporte para microcontroladores ESP32;
+A comunicação entre os dispositivos utiliza os recursos de Wi-Fi e ESP-NOW disponíveis nos microcontroladores ESP32.
 
-ESP32-S3 Super Mini;
+---
 
-ESP32-C3 Super Mini.
+## Utilização
 
-As principais funcionalidades de comunicação utilizam os recursos de Wi-Fi e ESP-NOW disponibilizados pelo ecossistema ESP32.
+### 1. Identificação dos endereços MAC
 
-Execução
+Caso sejam utilizados outros microcontroladores, os endereços MAC das pulseiras devem ser identificados utilizando o código:
 
-1. Identificação dos endereços MAC
+`Utilitarios/MACadress.ino`
 
-Antes da configuração do sistema, o endereço MAC de cada pulseira pode ser obtido utilizando:
+Os novos endereços devem ser inseridos no código do módulo principal.
 
-Utilitarios/MACadress.ino
+### 2. Programação das pulseiras
 
-Os endereços obtidos devem ser configurados no código do módulo principal.
+Carregar os respectivos arquivos nos ESP32-C3:
 
-2. Gravação das pulseiras
+- `PulseiraEsquerda/PulseiraEsquerda_Final.ino`
+- `PulseiraDireita/PulseiraDireita_Final.ino`
 
-Carregar os respectivos códigos:
+### 3. Programação do módulo principal
 
-PulseiraEsquerda/PulseiraEsquerda_Final.ino
-PulseiraDireita/PulseiraDireita_Final.ino
+Carregar no ESP32-S3:
 
-nos ESP32-C3 correspondentes.
+`ModuloPrincipal/ModuloPrincipal_Final.ino`
 
-3. Gravação do módulo principal
+### 4. Operação
 
-Carregar:
+Após a inicialização:
 
-ModuloPrincipal/ModuloPrincipal_Final.ino
+1. o módulo principal realiza a leitura dos sensores;
+2. as medições são filtradas;
+3. as condições de detecção são classificadas;
+4. os estados das pulseiras são definidos;
+5. os comandos são enviados via ESP-NOW;
+6. as pulseiras geram os padrões de vibração correspondentes;
+7. condições críticas também provocam o acionamento do buzzer.
 
-no ESP32-S3.
+---
 
-4. Inicialização
+## Alimentação
 
-Após a alimentação dos três módulos:
+Cada uma das três unidades vestíveis utiliza uma bateria independente com:
 
-o módulo principal inicia a aquisição dos sensores;
+- tensão nominal de **3,7 V**;
+- capacidade de **800 mAh**;
+- configuração de **uma célula (1S)**.
 
-as distâncias são filtradas e classificadas;
+A tensão da bateria é elevada para aproximadamente 5 V por meio do conversor MT3608.
 
-os estados das pulseiras são determinados;
+A recarga é realizada individualmente por meio da base externa desenvolvida para o projeto.
 
-os comandos são transmitidos via ESP-NOW;
+Durante o carregamento, a respectiva unidade deve permanecer desligada.
 
-cada pulseira gera o padrão de vibração correspondente;
+---
 
-condições críticas também provocam o acionamento do buzzer.
-
-Alimentação
-
-Cada unidade vestível possui bateria independente de:
-
-3,7 V
-800 mAh
-1 célula (1S)
-
-A tensão é elevada para aproximadamente 5 V por um conversor MT3608.
-
-O carregamento das três baterias é realizado individualmente por meio da base externa desenvolvida para o projeto.
-
-Durante o carregamento, recomenda-se manter a respectiva unidade desligada.
-
-Placas de circuito impresso
+## Placas de circuito impresso
 
 Foram desenvolvidas placas específicas para:
 
-módulo principal;
+- módulo principal;
+- pulseiras vibrotáteis;
+- base de carregamento.
 
-pulseiras vibrotáteis;
+Os esquemáticos e layouts foram elaborados no **EasyEDA**.
 
-base de carregamento.
+As placas foram fabricadas artesanalmente por meio de transferência térmica, corrosão química, furação e soldagem.
 
-Os esquemáticos e layouts foram elaborados no EasyEDA e as placas foram fabricadas artesanalmente por transferência térmica, corrosão química, furação e soldagem.
+As pulseiras esquerda e direita utilizam o mesmo projeto de placa.
 
-As duas pulseiras utilizam o mesmo projeto de placa.
+---
 
-Estrutura mecânica
+## Estrutura mecânica
 
-Os invólucros do protótipo foram modelados no SolidWorks e fabricados por impressão 3D em PETG.
+Os invólucros foram modelados no **SolidWorks** e fabricados por impressão 3D em **PETG**.
 
 Foram desenvolvidos:
 
-invólucro do módulo principal;
-
-tampa do módulo principal;
-
-invólucro das pulseiras;
-
-tampas das pulseiras;
-
-invólucro da base de carregamento;
-
-tampa da base de carregamento;
-
-suportes auxiliares para os sensores.
+- invólucro do módulo principal;
+- tampa do módulo principal;
+- invólucro das pulseiras;
+- tampas das pulseiras;
+- invólucro da base de carregamento;
+- tampa da base de carregamento;
+- suportes auxiliares dos sensores.
 
 O módulo principal é fixado a uma cinta de postura comercial utilizada como suporte vestível.
 
-Observações
+---
 
-Este projeto corresponde a um protótipo acadêmico experimental desenvolvido para avaliação da viabilidade funcional da arquitetura proposta.
+## Limitações e finalidade do projeto
 
-O dispositivo não deve ser considerado um substituto para recursos tradicionais de orientação e mobilidade, como a bengala branca, nem um produto médico ou comercial certificado.
+Este projeto corresponde a um **protótipo acadêmico experimental** desenvolvido para avaliar a viabilidade funcional da arquitetura proposta.
 
-Os resultados, limitações e possibilidades de melhoria são discutidos detalhadamente no Trabalho de Conclusão de Curso associado a este repositório.
+O dispositivo não constitui um produto médico certificado e não deve ser considerado substituto para recursos tradicionais de orientação e mobilidade, como a bengala branca.
 
-Versão associada ao TCC
+Os resultados, limitações e possibilidades de melhoria são discutidos no Trabalho de Conclusão de Curso associado a este repositório.
 
-A versão do código correspondente à implementação apresentada na monografia deve ser identificada por meio da seguinte tag/release:
+---
 
-v1.0-tcc
+## Versão associada ao TCC
 
-Essa versão deve permanecer inalterada para garantir a rastreabilidade entre o código disponibilizado neste repositório e os resultados documentados no trabalho.
+A versão do código correspondente à implementação apresentada na monografia está identificada pela seguinte release/tag:
 
-Autor
+`v1.0-tcc`
 
-Gustavo Pedro Feliciano
-Engenharia de Controle e Automação
+Essa versão deve permanecer inalterada para garantir a rastreabilidade entre os códigos disponibilizados e os resultados apresentados no trabalho.
+
+---
+
+## Autor
+
+**Gustavo Pedro Feliciano**  
+Engenharia de Controle e Automação  
 Universidade Federal de Minas Gerais — UFMG
 
-Trabalho acadêmico
+---
 
-Título: Dispositivo Vestível para Auxílio à Locomoção de Pessoas com Deficiência Visual
+## Trabalho acadêmico
 
-Instituição: Universidade Federal de Minas Gerais — UFMG
-Curso: Engenharia de Controle e Automação
-Ano: 2026
-
-
-Eu manteria essa versão relativamente completa porque, ao retirar os códigos da monografia, o **GitHub passa a ser a documentação principal da implementação**. No Apêndice A, aí sim deixamos apenas uma página com o link/QR Code do repositório e a indicação da release `v1.0-tcc`.
+**Título:** Dispositivo Vestível para Auxílio à Locomoção de Pessoas com Deficiência Visual  
+**Instituição:** Universidade Federal de Minas Gerais — UFMG  
+**Curso:** Engenharia de Controle e Automação  
+**Ano:** 2026
